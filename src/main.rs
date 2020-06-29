@@ -50,42 +50,28 @@ struct Blob {
     content: Vec<u8>,
 }
 
-fn store_batch(backend: &mut S3Backend, mut uploads: Vec<Blob>) -> Result<(), Error> {
-    let mut attempts = 0;
+fn store_batch(backend: &mut S3Backend, uploads: Vec<Blob>) -> Result<(), Error> {
+    // `FuturesUnordered` is used because the order of execution doesn't
+    // matter, we just want things to execute as fast as possible
+    let mut futures = FuturesUnordered::new();
 
-        // `FuturesUnordered` is used because the order of execution doesn't
-        // matter, we just want things to execute as fast as possible
-        let mut futures = FuturesUnordered::new();
-
-        // Drain uploads, filling `futures` with upload requests
-        for blob in uploads {
-            futures.push(
-                backend.client
-                    .put_object(PutObjectRequest {
-                        bucket: backend.bucket.to_string(),
-                        key: blob.path.clone(),
-                        body: Some(blob.content.clone().into()),
-                        content_type: Some(blob.mime.clone()),
-                        ..Default::default()
-                    })
-                    // Drop the value returned by `put_object` because we don't need it,
-                    // emit an error and replace the error values with the blob that failed
-                    // to upload so that we can retry failed uploads
-                    .map(|resp| match resp {
-                        Ok(..) => Ok(()),
-                        Err(err) => {
-                            eprintln!("error: {}", err);
-                            Err(blob)
-                        }
-                    }),
-            );
-        }
-        attempts += 1;
-
-        // Collect all the failed uploads so that we can retry them
-        while let Some(upload) = backend.runtime.handle().block_on(futures.next()) {
-        }
-
-    Ok(())
+    for blob in uploads {
+        futures.push(
+            backend.client
+                .put_object(PutObjectRequest {
+                    bucket: backend.bucket.to_string(),
+                    key: blob.path.clone(),
+                    body: Some(blob.content.clone().into()),
+                    content_type: Some(blob.mime.clone()),
+                    ..Default::default()
+                })
+                .map(|resp| match resp {
+                    Ok(..) => (),
+                    Err(err) => eprintln!("error: {}", err),
+                }),
+        );
     }
 
+    for _ in backend.runtime.handle().block_on(futures.next()) {}
+    Ok(())
+}
