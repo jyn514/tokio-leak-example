@@ -10,7 +10,7 @@ use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
 
 fn main() {
-    for _ in 0..50 {
+    for _ in 0..15 {
         let creds = DefaultCredentialsProvider::new().unwrap();
         let client = S3Client::new_with(
             rusoto_core::request::HttpClient::new().unwrap(),
@@ -53,7 +53,6 @@ struct Blob {
 fn store_batch(backend: &mut S3Backend, mut uploads: Vec<Blob>) -> Result<(), Error> {
     let mut attempts = 0;
 
-    loop {
         // `FuturesUnordered` is used because the order of execution doesn't
         // matter, we just want things to execute as fast as possible
         let mut futures = FuturesUnordered::new();
@@ -85,20 +84,7 @@ fn store_batch(backend: &mut S3Backend, mut uploads: Vec<Blob>) -> Result<(), Er
 
         // Collect all the failed uploads so that we can retry them
         while let Some(upload) = backend.runtime.handle().block_on(futures.next()) {
-            if let Err(blob) = upload {
-                uploads.push(blob);
-            }
         }
-
-        // If there are no further uploads we were successful and can return
-        if uploads.is_empty() {
-            break;
-
-        // If more than three attempts to upload fail, return an error
-        } else if attempts >= 3 {
-            failure::bail!("Failed to upload to s3 three times, abandoning");
-        }
-    }
 
     Ok(())
     }
