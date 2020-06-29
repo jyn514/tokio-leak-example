@@ -1,0 +1,15 @@
+[package]
+name = "tokio-example"
+version = "0.1.0"
+authors = ["Joshua Nelson <jyn514@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "0.2.21", features = ["full"] }
+rusoto_core = "0.44"
+rusoto_credential = "0.44"
+rusoto_s3 = "0.44"
+failure = "0.1"
+futures = "0.3"
